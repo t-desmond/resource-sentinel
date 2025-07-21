@@ -10,7 +10,7 @@
 Run the following command to install:
 
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/t-desmond/resource-sentinel/main/install.sh)
+curl -sL https://raw.githubusercontent.com/t-desmond/resource-sentinel/main/install.sh | sudo bash
 ```
 
 You will be prompted to configure monitoring parameters and whether to install as a background service.
