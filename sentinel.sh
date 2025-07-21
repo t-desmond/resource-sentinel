@@ -24,6 +24,8 @@ MAX_ALERTS=$(yq e '.monitoring.max_alerts_per_process' "$CONFIG_FILE")
 IGNORE_LIST=($(yq e '.ignore.processes[]' "$CONFIG_FILE"))
 RESP_TIMEOUT=$(yq e '.notifications.response_timeout' "$CONFIG_FILE")
 REMINDER_DELAY=$(yq e '.notifications.reminder_delay' "$CONFIG_FILE")
+DISCORD_ENABLED=$(yq e '.notifications.discord.enabled' "$CONFIG_FILE")
+DISCORD_WEBHOOK_URL=$(yq e '.notifications.discord.webhook_url' "$CONFIG_FILE")
 
 declare -A ALERT_COUNT
 declare -A IGNORE_PIDS
@@ -63,7 +65,11 @@ while [ "$(date +%s)" -lt "$(( $(date +%s) + DURATION ))" ]; do
             ALERT_COUNT[$pid]=$((count+1))
             log "High usage detected: $comm (PID $pid) CPU: $cpu% MEM: $mem%"
 
-            response=$("$INSTALL_DIR/notifier.sh" "$pid" "$comm" "$cpu" "$mem")
+            if [[ "$DISCORD_ENABLED" == "true" && -n "$DISCORD_WEBHOOK_URL" ]]; then
+                /usr/local/bin/notifier.sh "discord" "$pid" "$comm" "$cpu" "$mem" "$DISCORD_WEBHOOK_URL" &
+            fi
+
+            response=$(/usr/local/bin/notifier.sh "native" "$pid" "$comm" "$cpu" "$mem")
             log "User responded: $response for PID $pid ($comm)"
 
             case "$response" in

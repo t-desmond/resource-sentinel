@@ -107,6 +107,9 @@ notifications:
   method: native
   response_timeout: 30
   reminder_delay: 60
+  discord:
+    enabled: false
+    webhook_url: ""
 EOF
 
 # Copy scripts to install dir
@@ -155,6 +158,12 @@ EOF
 else
   echo "You chose to run sentinel manually."
   echo "Run it with: $INSTALL_DIR/sentinel"
+fi
+
+read -rp "Enable Discord notifications? [y/N]: " DISCORD_CHOICE
+if [[ "$DISCORD_CHOICE" =~ ^[Yy]$ ]]; then
+    yq e '.notifications.discord.enabled = true' -i "$CONFIG_FILE"
+    echo "Discord notifications enabled. Please edit $CONFIG_FILE to add your webhook URL."
 fi
 
 log "Installation complete."

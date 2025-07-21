@@ -1,8 +1,11 @@
-#!/bin/bash
-pid="$1"
-proc="$2"
-cpu="$3"
-mem="$4"
+#!/usr/bin/env bash
+
+notification_type="$1"
+pid="$2"
+proc="$3"
+cpu="$4"
+mem="$5"
+webhook_url="${6-}"
 
 HOST_OS="$(uname -s)"
 
@@ -48,4 +51,19 @@ notify_user() {
   fi
 }
 
-notify_user
+send_discord_notification() {
+    local message
+    message="High resource usage detected on $(hostname):
+- **Process**: $proc (PID: $pid)
+- **CPU Usage**: $cpu%
+- **Memory Usage**: $mem MB"
+
+    curl -s -H "Content-Type: application/json" \
+         -d "{ \"content\": \"$message\" }" "$webhook_url" > /dev/null
+}
+
+if [[ "$notification_type" == "discord" ]]; then
+    send_discord_notification
+else
+    notify_user
+fi
