@@ -1,9 +1,20 @@
 #!/bin/bash
 set -euo pipefail
 
-CONFIG_FILE="/etc/resource-sentinel/config.yaml"
+SYSTEM_CONFIG_FILE="/etc/resource-sentinel/config.yaml"
+USER_CONFIG_DIR="$HOME/.config/resource-sentinel"
+USER_CONFIG_FILE="$USER_CONFIG_DIR/config.yaml"
 LOG_FILE="/var/log/resource-sentinel/monitor.log"
 HOST_OS="$(uname -s)"
+
+if [[ -f "$USER_CONFIG_FILE" ]]; then
+    CONFIG_FILE="$USER_CONFIG_FILE"
+elif [[ -f "$SYSTEM_CONFIG_FILE" ]]; then
+    CONFIG_FILE="$SYSTEM_CONFIG_FILE"
+else
+    echo "Configuration file not found." >&2
+    exit 1
+fi
 
 DURATION=$(yq e '.monitoring.duration' "$CONFIG_FILE")
 INTERVAL=$(yq e '.monitoring.interval' "$CONFIG_FILE")

@@ -68,6 +68,21 @@ done
 mkdir -p "$INSTALL_DIR" "$CONFIG_DIR" "$LOG_DIR"
 chmod 755 "$INSTALL_DIR" "$CONFIG_DIR" "$LOG_DIR"
 
+# Create user-specific config directory if run with sudo
+if [[ -n "${SUDO_USER-}" ]]; then
+    USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+    if [[ -n "$USER_HOME" && -d "$USER_HOME" ]]; then
+        USER_CONFIG_DIR="$USER_HOME/.config/resource-sentinel"
+        # Ensure parent .config directory exists and has correct ownership
+        mkdir -p "$(dirname "$USER_CONFIG_DIR")"
+        chown "$SUDO_USER:$(id -g -n "$SUDO_USER")" "$(dirname "$USER_CONFIG_DIR")"
+        # Create user config dir and set ownership
+        mkdir -p "$USER_CONFIG_DIR"
+        chown "$SUDO_USER:$(id -g -n "$SUDO_USER")" "$USER_CONFIG_DIR"
+        log "Created user-specific config directory at $USER_CONFIG_DIR"
+    fi
+fi
+
 # Prompt config values with defaults
 read -rp "Monitoring duration in minutes [30]: " DURATION
 DURATION=${DURATION:-30}
@@ -143,5 +158,6 @@ else
 fi
 
 log "Installation complete."
+echo "You can override system-wide settings by creating a config file at: ~/.config/resource-sentinel/config.yaml"
 echo "Temporary installation directory: $TEMP_DIR"
 echo "Installation log file: $INSTALL_LOG"
