@@ -175,6 +175,9 @@ notifications:
   discord:
     enabled: false
     webhook_url: ""
+
+daemon:
+  enabled: true
 EOF
 
 log_step "Fetching scripts from remote repository..."
@@ -182,15 +185,16 @@ curl -sSL "$REPO_URL/sentinel.sh" -o "$INSTALL_DIR/sentinel" &>/dev/null
 chmod +x "$INSTALL_DIR/sentinel" &>/dev/null
 curl -sSL "$REPO_URL/utils/notifier.sh" -o "$INSTALL_DIR/notifier.sh" &>/dev/null
 chmod +x "$INSTALL_DIR/notifier.sh" &>/dev/null
+curl -sSL "$REPO_URL/sentinel-config.sh" -o "$INSTALL_DIR/sentinel-config" &>/dev/null
+chmod +x "$INSTALL_DIR/sentinel-config" &>/dev/null
 cp "$TEMP_DIR/config.yaml" "$CONFIG_DIR/config.yaml" &>/dev/null
 
 log_step "Files copied and permissions set."
 
-# Default to daemon installation
-log_info "Defaulting to daemon installation."
-DAEMON_CHOICE="Y"
-if [[ "$DAEMON_CHOICE" =~ ^[Yy]$ ]]; then
-  if [[ "$(uname)" == "Linux" ]]; then
+# Default to daemon installation on Linux
+if [[ "$(uname)" == "Linux" ]]; then
+    log_info "Installing as a systemd service by default."
+    log_info "You can disable this by setting 'daemon.enabled: false' in the config file and running sentinel-config apply."
     cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=Resource Sentinel System Monitor
@@ -208,14 +212,10 @@ EOF
     systemctl start resource-sentinel.service &>/dev/null
     log_step "Daemon installed and started."
     log_info "Use 'sudo systemctl status resource-sentinel.service' to check status."
-  else
-    log_info "Daemon install not supported automatically on this OS."
-    log_info "Run sentinel manually with: $INSTALL_DIR/sentinel"
-  fi
 else
-  log_info "You chose to run sentinel manually."
-  log_info "Run it with: $INSTALL_DIR/sentinel"
+  log_info "Skipping daemon setup on non-Linux OS."
 fi
+
 
 # Skip Discord notifications by default
 log_info "Skipping Discord notifications setup. You can enable it manually in the config file."
