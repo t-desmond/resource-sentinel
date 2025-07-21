@@ -85,7 +85,14 @@ fi
 
 for tool in "${require_tools[@]}"; do
   if ! command -v "$tool" &>/dev/null; then
-    read -rp "$tool is not installed. Attempt to install it? [y/N]: " ans
+    ans="n"
+    if [[ -t 0 ]]; then
+        read -rp "$tool is not installed. Attempt to install it? [y/N]: " ans
+    else
+        log_info "$tool is not installed. Installing automatically in non-interactive mode."
+        ans="y"
+    fi
+
     if [[ "$ans" =~ ^[Yy]$ ]]; then
       log_step "Installing $tool..."
       if [[ "$tool" == "yq" ]]; then
@@ -126,7 +133,7 @@ for tool in "${require_tools[@]}"; do
         fi
       fi
     else
-      log_error "User declined to install $tool"
+      log_error "User declined to install $tool. Aborting."
       exit 1
     fi
   fi
@@ -151,9 +158,15 @@ if [[ -n "${SUDO_USER-}" ]]; then
 fi
 
 # Prompt config values with defaults
-read -rp "Monitoring duration in minutes [30]: " DURATION
+if [[ -t 0 ]]; then
+    read -rp "Monitoring duration in minutes [30]: " DURATION
+    read -rp "Processes to ignore (comma separated) [chrome,firefox]: " IGNORE
+else
+    log_info "Using default values for configuration in non-interactive mode."
+    DURATION=""
+    IGNORE=""
+fi
 DURATION=${DURATION:-30}
-read -rp "Processes to ignore (comma separated) [chrome,firefox]: " IGNORE
 IGNORE=${IGNORE:-chrome,firefox}
 
 # Create config.yaml content
@@ -185,7 +198,12 @@ cp "$TEMP_DIR/config.yaml" "$CONFIG_DIR/config.yaml" &>/dev/null
 
 log_step "Files copied and permissions set."
 
-read -rp "Install Resource Sentinel as a background service (daemon)? [Y/n]: " DAEMON_CHOICE
+if [[ -t 0 ]]; then
+    read -rp "Install Resource Sentinel as a background service (daemon)? [Y/n]: " DAEMON_CHOICE
+else
+    log_info "Defaulting to daemon installation in non-interactive mode."
+    DAEMON_CHOICE="Y"
+fi
 DAEMON_CHOICE=${DAEMON_CHOICE:-Y}
 if [[ "$DAEMON_CHOICE" =~ ^[Yy]$ ]]; then
   if [[ "$(uname)" == "Linux" ]]; then
@@ -215,7 +233,12 @@ else
   log_info "Run it with: $INSTALL_DIR/sentinel"
 fi
 
-read -rp "Enable Discord notifications? [y/N]: " DISCORD_CHOICE
+if [[ -t 0 ]]; then
+    read -rp "Enable Discord notifications? [y/N]: " DISCORD_CHOICE
+else
+    log_info "Skipping Discord notifications setup in non-interactive mode."
+    DISCORD_CHOICE="N"
+fi
 if [[ "$DISCORD_CHOICE" =~ ^[Yy]$ ]]; then
     yq e '.notifications.discord.enabled = true' -i "$CONFIG_FILE" &>/dev/null
     log_info "Discord notifications enabled. Please edit $CONFIG_FILE to add your webhook URL."
