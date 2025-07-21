@@ -1,6 +1,44 @@
 #!/bin/bash
 set -euo pipefail
 
+# Define cleanup function first, before any potential errors can occur
+cleanup() {
+    echo "[ERROR] Installation failed."
+    echo "[INFO] Cleaning up temporary files..."
+    
+    # Clean up temp directory if it exists
+    if [[ -n "${TEMP_DIR-}" && -d "$TEMP_DIR" ]]; then
+        rm -rf "$TEMP_DIR"
+        echo "[INFO] Removed temporary directory: $TEMP_DIR"
+    fi
+    
+    # Clean up log file if it exists
+    if [[ -n "${INSTALL_LOG-}" && -f "$INSTALL_LOG" ]]; then
+        rm -f "$INSTALL_LOG"
+        echo "[INFO] Removed log file: $INSTALL_LOG"
+    fi
+    
+    # Clean up any partially installed files
+    if [[ -n "${CONFIG_DIR-}" && -d "$CONFIG_DIR" ]]; then
+        rm -rf "$CONFIG_DIR"
+        echo "[INFO] Removed config directory: $CONFIG_DIR"
+    fi
+    
+    # Remove any partially installed scripts
+    for script in sentinel notifier.sh; do
+        if [[ -f "/usr/local/bin/$script" ]]; then
+            rm -f "/usr/local/bin/$script"
+            echo "[INFO] Removed installed script: /usr/local/bin/$script"
+        fi
+    done
+    
+    exit 1
+}
+
+# Set up error trap immediately after defining cleanup
+trap cleanup ERR
+
+# Now define installation paths and create temp directory
 INSTALL_DIR="/usr/local/bin"
 CONFIG_DIR="/etc/resource-sentinel"
 LOG_DIR="/var/log/resource-sentinel"
@@ -8,28 +46,26 @@ CONFIG_FILE="$CONFIG_DIR/config.yaml"
 SERVICE_FILE="/etc/systemd/system/resource-sentinel.service"
 LOG_FILE="$LOG_DIR/monitor.log"
 TEMP_DIR="$(mktemp -d -t resource-sentinel-setup-XXXX)"
-INSTALL_LOG="/tmp/resource-sentinel-install.log"
+INSTALL_LOG="/tmp/resource-sentinel-install-$$.log"
 
-trap 'cleanup' ERR
-
-cleanup() {
-  echo "[ERROR] Installation failed. See $INSTALL_LOG"
-  echo "[INFO] Cleaning up temp files..."
-  rm -rf "$TEMP_DIR"
-  exit 1
+# Create log file with proper permissions
+touch "$INSTALL_LOG" || {
+    echo "[ERROR] Cannot create log file: $INSTALL_LOG"
+    cleanup
 }
+chmod 600 "$INSTALL_LOG"
 
 log() {
-  local message
-  message="[$(date '+%F %T')] $1"
-  echo "$message"
-  echo "$message" >> "$INSTALL_LOG"
+    local message
+    message="[$(date '+%F %T')] $1"
+    echo "$message"
+    echo "$message" >> "$INSTALL_LOG"
 }
 
 # Check root
 if [[ $EUID -ne 0 ]]; then
-  echo "Please run as root or with sudo."
-  exit 1
+    echo "Please run as root or with sudo."
+    cleanup
 fi
 
 log "Starting Resource Sentinel installation..."
@@ -50,18 +86,50 @@ for tool in "${require_tools[@]}"; do
     read -rp "$tool is not installed. Attempt to install it? [y/N]: " ans
     if [[ "$ans" =~ ^[Yy]$ ]]; then
       log "Installing $tool..."
-      if [[ "$(uname)" == "Linux" ]]; then
-        apt update && apt install -y "$tool"
-      elif [[ "$(uname)" == "Darwin" ]]; then
-        if ! command -v brew &>/dev/null; then
-          log "Homebrew not found. Please install Homebrew first."
-          exit 1
+      if [[ "$tool" == "yq" ]]; then
+        log "Attempting to install yq from GitHub..."
+        YQ_BINARY=""
+        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+        ARCH=$(uname -m)
+
+        if [[ "$OS" == "linux" ]]; then
+            if [[ "$ARCH" == "x86_64" ]]; then
+                YQ_BINARY="yq_linux_amd64"
+            elif [[ "$ARCH" == "aarch64" ]]; then
+                YQ_BINARY="yq_linux_arm64"
+            fi
+        elif [[ "$OS" == "darwin" ]]; then
+            if [[ "$ARCH" == "x86_64" ]]; then
+                YQ_BINARY="yq_darwin_amd64"
+            elif [[ "$ARCH" == "arm64" ]]; then
+                YQ_BINARY="yq_darwin_arm64"
+            fi
         fi
-        brew install "$tool"
+
+        if [[ -n "$YQ_BINARY" ]]; then
+            curl -SL "https://github.com/mikefarah/yq/releases/latest/download/${YQ_BINARY}" -o "/usr/local/bin/yq"
+            chmod +x "/usr/local/bin/yq"
+            log "yq installed successfully to /usr/local/bin/yq"
+        else
+            log "Unsupported OS/architecture for yq auto-installation: $OS/$ARCH"
+            log "Please install yq manually and re-run this script."
+            cleanup
+        fi
+      else
+        # Existing installation logic for other tools
+        if [[ "$(uname)" == "Linux" ]]; then
+          apt update && apt install -y "$tool"
+        elif [[ "$(uname)" == "Darwin" ]]; then
+          if ! command -v brew &>/dev/null; then
+            log "Homebrew not found. Please install Homebrew first."
+            cleanup
+          fi
+          brew install "$tool"
+        fi
       fi
     else
       log "User declined to install $tool"
-      exit 1
+      cleanup
     fi
   fi
   log "$tool is installed."
