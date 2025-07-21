@@ -27,25 +27,32 @@ log_warn() {
 }
 
 cleanup() {
-    log_error "Installation failed."
-    log_info "Cleaning up temporary files..."
+    local exit_code=$?
+    
+    # Always clean up temp directory
     if [[ -n "${TEMP_DIR-}" && -d "$TEMP_DIR" ]]; then
-        rm -rf "$TEMP_DIR" &>/dev/null || true
-        log_info "Removed temporary directory: $TEMP_DIR"
+        rm -rf "$TEMP_DIR" &>/dev/null
     fi
-    if [[ -n "${CONFIG_DIR-}" && -d "$CONFIG_DIR" ]]; then
-        rm -rf "$CONFIG_DIR" &>/dev/null || true
-        log_info "Removed config directory: $CONFIG_DIR"
-    fi
-    for script in sentinel notifier.sh; do
-        if [[ -f "/usr/local/bin/$script" ]]; then
-            rm -f "/usr/local/bin/$script" &>/dev/null || true
-            log_info "Removed installed script: /usr/local/bin/$script"
+
+    # Only perform rollback on failure
+    if [[ $exit_code -ne 0 ]]; then
+        log_error "Installation failed with exit code $exit_code. Rolling back changes..."
+        if [[ -n "${CONFIG_DIR-}" && -d "$CONFIG_DIR" ]]; then
+            rm -rf "$CONFIG_DIR" &>/dev/null
+            log_info "Removed config directory: $CONFIG_DIR"
         fi
-    done
-    exit 1
+        for script in sentinel notifier.sh; do
+            if [[ -f "/usr/local/bin/$script" ]]; then
+                rm -f "/usr/local/bin/$script" &>/dev/null
+                log_info "Removed installed script: /usr/local/bin/$script"
+            fi
+        done
+    else
+        log_info "Cleaning up temporary files..."
+    fi
 }
-trap cleanup ERR
+# Set up trap to run cleanup on any exit
+trap cleanup EXIT
 
 INSTALL_DIR="/usr/local/bin"
 CONFIG_DIR="/etc/resource-sentinel"
@@ -72,8 +79,8 @@ fi
 
 log_step "Starting Resource Sentinel installation..."
 
-# Dependency check and optional install
-require_tools=( "yq" "curl" )
+# Dependency check for tools
+require_tools=( "curl" "yq" )
 if [[ "$(uname)" == "Linux" ]]; then
   require_tools+=( "zenity" )
 elif [[ "$(uname)" == "Darwin" ]]; then
