@@ -20,16 +20,19 @@ cleanup() {
 }
 
 log() {
-  echo "[$(date '+%F %T')] $1" | tee -a "$INSTALL_LOG"
+  local message
+  message="[$(date '+%F %T')] $1"
+  echo "$message"
+  echo "$message" >> "$INSTALL_LOG"
 }
-
-log "Starting Resource Sentinel installation..."
 
 # Check root
 if [[ $EUID -ne 0 ]]; then
   echo "Please run as root or with sudo."
   exit 1
 fi
+
+log "Starting Resource Sentinel installation..."
 
 # Dependency check and optional install
 require_tools=( "yq" "curl" )
