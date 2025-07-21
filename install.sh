@@ -85,56 +85,44 @@ fi
 
 for tool in "${require_tools[@]}"; do
   if ! command -v "$tool" &>/dev/null; then
-    ans="n"
-    if [[ -t 0 ]]; then
-        read -rp "$tool is not installed. Attempt to install it? [y/N]: " ans
-    else
-        log_info "$tool is not installed. Installing automatically in non-interactive mode."
-        ans="y"
-    fi
-
-    if [[ "$ans" =~ ^[Yy]$ ]]; then
-      log_step "Installing $tool..."
-      if [[ "$tool" == "yq" ]]; then
-        YQ_BINARY=""
-        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-        ARCH=$(uname -m)
-        if [[ "$OS" == "linux" ]]; then
-            if [[ "$ARCH" == "x86_64" ]]; then
-                YQ_BINARY="yq_linux_amd64"
-            elif [[ "$ARCH" == "aarch64" ]]; then
-                YQ_BINARY="yq_linux_arm64"
-            fi
-        elif [[ "$OS" == "darwin" ]]; then
-            if [[ "$ARCH" == "x86_64" ]]; then
-                YQ_BINARY="yq_darwin_amd64"
-            elif [[ "$ARCH" == "arm64" ]]; then
-                YQ_BINARY="yq_darwin_arm64"
-            fi
-        fi
-        if [[ -n "$YQ_BINARY" ]]; then
-            curl -sSL "$REPO_URL/utils/$YQ_BINARY" -o "/usr/local/bin/yq" &>/dev/null
-            chmod +x "/usr/local/bin/yq" &>/dev/null
-            log_step "yq installed successfully to /usr/local/bin/yq"
-        else
-            log_error "Unsupported OS/architecture for yq auto-installation: $OS/$ARCH"
-            log_error "Please install yq manually and re-run this script."
-            exit 1
-        fi
-      else
-        if [[ "$(uname)" == "Linux" ]]; then
-          apt update &>/dev/null && apt install -y "$tool" &>/dev/null
-        elif [[ "$(uname)" == "Darwin" ]]; then
-          if ! command -v brew &>/dev/null; then
-            log_error "Homebrew not found. Please install Homebrew first."
-            exit 1
+    log_info "$tool is not installed. Installing automatically."
+    log_step "Installing $tool..."
+    if [[ "$tool" == "yq" ]]; then
+      YQ_BINARY=""
+      OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+      ARCH=$(uname -m)
+      if [[ "$OS" == "linux" ]]; then
+          if [[ "$ARCH" == "x86_64" ]]; then
+              YQ_BINARY="yq_linux_amd64"
+          elif [[ "$ARCH" == "aarch64" ]]; then
+              YQ_BINARY="yq_linux_arm64"
           fi
-          brew install "$tool" &>/dev/null
-        fi
+      elif [[ "$OS" == "darwin" ]]; then
+          if [[ "$ARCH" == "x86_64" ]]; then
+              YQ_BINARY="yq_darwin_amd64"
+          elif [[ "$ARCH" == "arm64" ]]; then
+              YQ_BINARY="yq_darwin_arm64"
+          fi
+      fi
+      if [[ -n "$YQ_BINARY" ]]; then
+          curl -sSL "$REPO_URL/utils/$YQ_BINARY" -o "/usr/local/bin/yq" &>/dev/null
+          chmod +x "/usr/local/bin/yq" &>/dev/null
+          log_step "yq installed successfully to /usr/local/bin/yq"
+      else
+          log_error "Unsupported OS/architecture for yq auto-installation: $OS/$ARCH"
+          log_error "Please install yq manually and re-run this script."
+          exit 1
       fi
     else
-      log_error "User declined to install $tool. Aborting."
-      exit 1
+      if [[ "$(uname)" == "Linux" ]]; then
+        apt update &>/dev/null && apt install -y "$tool" &>/dev/null
+      elif [[ "$(uname)" == "Darwin" ]]; then
+        if ! command -v brew &>/dev/null; then
+          log_error "Homebrew not found. Please install Homebrew first."
+          exit 1
+        fi
+        brew install "$tool" &>/dev/null
+      fi
     fi
   fi
   log_step "$tool is installed."
@@ -157,17 +145,10 @@ if [[ -n "${SUDO_USER-}" ]]; then
     fi
 fi
 
-# Prompt config values with defaults
-if [[ -t 0 ]]; then
-    read -rp "Monitoring duration in minutes [30]: " DURATION
-    read -rp "Processes to ignore (comma separated) [chrome,firefox]: " IGNORE
-else
-    log_info "Using default values for configuration in non-interactive mode."
-    DURATION=""
-    IGNORE=""
-fi
-DURATION=${DURATION:-30}
-IGNORE=${IGNORE:-chrome,firefox}
+# Set default configuration values
+log_info "Using default values for configuration."
+DURATION=30
+IGNORE="chrome,firefox"
 
 # Create config.yaml content
 cat > "$TEMP_DIR/config.yaml" <<EOF
@@ -198,13 +179,9 @@ cp "$TEMP_DIR/config.yaml" "$CONFIG_DIR/config.yaml" &>/dev/null
 
 log_step "Files copied and permissions set."
 
-if [[ -t 0 ]]; then
-    read -rp "Install Resource Sentinel as a background service (daemon)? [Y/n]: " DAEMON_CHOICE
-else
-    log_info "Defaulting to daemon installation in non-interactive mode."
-    DAEMON_CHOICE="Y"
-fi
-DAEMON_CHOICE=${DAEMON_CHOICE:-Y}
+# Default to daemon installation
+log_info "Defaulting to daemon installation."
+DAEMON_CHOICE="Y"
 if [[ "$DAEMON_CHOICE" =~ ^[Yy]$ ]]; then
   if [[ "$(uname)" == "Linux" ]]; then
     cat > "$SERVICE_FILE" <<EOF
@@ -233,13 +210,9 @@ else
   log_info "Run it with: $INSTALL_DIR/sentinel"
 fi
 
-if [[ -t 0 ]]; then
-    read -rp "Enable Discord notifications? [y/N]: " DISCORD_CHOICE
-else
-    log_info "Skipping Discord notifications setup in non-interactive mode."
-    DISCORD_CHOICE="N"
-fi
-if [[ "$DISCORD_CHOICE" =~ ^[Yy]$ ]]; then
+# Skip Discord notifications by default
+log_info "Skipping Discord notifications setup. You can enable it manually in the config file."
+if [[ "N" =~ ^[Yy]$ ]]; then
     yq e '.notifications.discord.enabled = true' -i "$CONFIG_FILE" &>/dev/null
     log_info "Discord notifications enabled. Please edit $CONFIG_FILE to add your webhook URL."
     log_info "Join our Discord server: https://discord.gg/your-server-link"
